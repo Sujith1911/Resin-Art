@@ -4,7 +4,126 @@
 -- and seed_admin_users.sql
 -- ====================================================================
 
--- ★ FIX: Add missing columns if they don't exist (safe to re-run)
+-- ★ CREATE MISSING TABLES (safe to re-run — uses IF NOT EXISTS)
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS public.categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL UNIQUE,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    image_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.products (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug VARCHAR(150) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    tagline TEXT,
+    description TEXT,
+    category_id UUID REFERENCES public.categories(id),
+    base_price_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    compare_at_price_inr NUMERIC(10, 2),
+    rating NUMERIC(3, 2) DEFAULT 5.00,
+    review_count INT DEFAULT 0,
+    is_customizable BOOLEAN DEFAULT TRUE,
+    is_featured BOOLEAN DEFAULT FALSE,
+    is_bestseller BOOLEAN DEFAULT FALSE,
+    status VARCHAR(20) DEFAULT 'Published',
+    flower_details TEXT,
+    resin_type VARCHAR(100),
+    materials TEXT[] DEFAULT '{}',
+    care_guide TEXT[] DEFAULT '{}',
+    images TEXT[] NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.product_variants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    sku VARCHAR(100) UNIQUE NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    price_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    compare_at_price_inr NUMERIC(10, 2),
+    inventory_quantity INT NOT NULL DEFAULT 0,
+    metal_color VARCHAR(50),
+    size VARCHAR(50),
+    shape VARCHAR(50),
+    weight_grams NUMERIC(6, 2),
+    dimensions_cm VARCHAR(50),
+    images TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.banners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    subtitle TEXT,
+    cta_text VARCHAR(100),
+    cta_link TEXT,
+    desktop_image_url TEXT NOT NULL,
+    mobile_image_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    status VARCHAR(20) DEFAULT 'Active',
+    priority INT DEFAULT 1,
+    click_count INT DEFAULT 0,
+    start_date TIMESTAMP WITH TIME ZONE,
+    end_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    discount_value VARCHAR(50) NOT NULL,
+    min_purchase_inr NUMERIC(10, 2) DEFAULT 0,
+    max_usage INT DEFAULT 100,
+    used_count INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    categories TEXT DEFAULT 'All',
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_number VARCHAR(50) UNIQUE NOT NULL,
+    user_id UUID,
+    customer_name VARCHAR(150) NOT NULL,
+    customer_email VARCHAR(254) NOT NULL,
+    customer_phone VARCHAR(50) NOT NULL,
+    shipping_address JSONB NOT NULL DEFAULT '{}'::jsonb,
+    subtotal_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    discount_inr NUMERIC(10, 2) DEFAULT 0,
+    shipping_inr NUMERIC(10, 2) DEFAULT 0,
+    cgst_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    sgst_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    total_inr NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    payment_status VARCHAR(50) DEFAULT 'PENDING',
+    workshop_status VARCHAR(100) DEFAULT '1. Pending',
+    tracking_number VARCHAR(100),
+    razorpay_order_id VARCHAR(100),
+    razorpay_payment_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    category VARCHAR(50) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    details JSONB DEFAULT '{}'::jsonb,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ★ ADD MISSING COLUMNS to existing tables (safe if columns already exist)
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='status') THEN
@@ -27,6 +146,50 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='banners' AND column_name='click_count') THEN
     ALTER TABLE public.banners ADD COLUMN click_count INT DEFAULT 0;
+  END IF;
+END $$;
+
+-- ★ ENABLE RLS (safe to re-run)
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.banners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+-- ★ PUBLIC READ policies (so storefront can fetch data)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='products' AND policyname='Public Read Products') THEN
+    CREATE POLICY "Public Read Products" ON public.products FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='banners' AND policyname='Public Read Banners') THEN
+    CREATE POLICY "Public Read Banners" ON public.banners FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='coupons' AND policyname='Public Read Coupons') THEN
+    CREATE POLICY "Public Read Coupons" ON public.coupons FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='orders' AND policyname='Public Read Orders') THEN
+    CREATE POLICY "Public Read Orders" ON public.orders FOR SELECT USING (true);
+  END IF;
+  -- Allow inserts/updates for all (simplified for testing - tighten for production)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='products' AND policyname='Allow All Products') THEN
+    CREATE POLICY "Allow All Products" ON public.products FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='banners' AND policyname='Allow All Banners') THEN
+    CREATE POLICY "Allow All Banners" ON public.banners FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='coupons' AND policyname='Allow All Coupons') THEN
+    CREATE POLICY "Allow All Coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='orders' AND policyname='Allow All Orders') THEN
+    CREATE POLICY "Allow All Orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='product_variants' AND policyname='Allow All Variants') THEN
+    ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY "Allow All Variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='categories' AND policyname='Allow All Categories') THEN
+    ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY "Allow All Categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
   END IF;
 END $$;
 
