@@ -1,0 +1,397 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 30% 98%; /* Ivory Pearl White */
+    --foreground: 155 40% 10%; /* Deep Forest Emerald */
+
+    --card: 0 0% 100%;
+    --card-foreground: 155 40% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 155 40% 10%;
+
+    --primary: 155 35% 15%; /* Deep Forest Green #102A1C */
+    --primary-foreground: 45 40% 96%;
+
+    --secondary: 45 60% 95%; /* Cream / Ivory */
+    --secondary-foreground: 155 35% 15%;
+
+    --muted: 150 15% 92%;
+    --muted-foreground: 155 12% 42%;
+
+    --accent: 43 68% 52%; /* Gold #D4AF37 */
+    --accent-foreground: 155 40% 8%;
+
+    --destructive: 352 80% 34%; /* Ruby Red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 15% 86%;
+    --input: 150 15% 86%;
+    --ring: 43 68% 52%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 155 45% 6%; /* Deep Midnight Emerald #07150E */
+    --foreground: 45 40% 96%;
+
+    --card: 155 35% 9%;
+    --card-foreground: 45 40% 96%;
+
+    --popover: 155 35% 9%;
+    --popover-foreground: 45 40% 96%;
+
+    --primary: 43 68% 52%;
+    --primary-foreground: 155 45% 6%;
+
+    --secondary: 155 25% 14%;
+    --secondary-foreground: 45 40% 96%;
+
+    --muted: 155 20% 16%;
+    --muted-foreground: 155 12% 70%;
+
+    --accent: 349 45% 60%; /* Rose Gold */
+    --accent-foreground: 155 45% 6%;
+
+    --border: 155 25% 18%;
+    --input: 155 25% 18%;
+    --ring: 43 68% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border transition-colors duration-200;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-accent/30 selection:text-foreground overflow-x-hidden;
+    background-image: 
+      radial-gradient(at 10% 10%, rgba(212, 175, 55, 0.06) 0px, transparent 50%),
+      radial-gradient(at 90% 90%, rgba(15, 82, 87, 0.1) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(229, 228, 226, 0.04) 0px, transparent 40%);
+  }
+  .dark body {
+    background-image: 
+      radial-gradient(at 10% 10%, rgba(212, 175, 55, 0.1) 0px, transparent 50%),
+      radial-gradient(at 90% 90%, rgba(15, 82, 87, 0.2) 0px, transparent 50%),
+      radial-gradient(at 50% 40%, rgba(183, 110, 121, 0.06) 0px, transparent 40%);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif tracking-tight;
+  }
+}
+
+/* =================================================================
+   DEEP ULTRA-GLOSSY GLASSMORPHISM v2 — Layered Reflections
+   ================================================================= */
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 
+    0 12px 40px 0 rgba(30, 58, 43, 0.08),
+    0 2px 8px 0 rgba(212, 175, 55, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-panel {
+  background: rgba(11, 26, 18, 0.7);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  box-shadow: 
+    0 12px 40px 0 rgba(0, 0, 0, 0.5),
+    0 2px 8px 0 rgba(212, 175, 55, 0.08),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Glass card with hover glow and lift */
+.glass-card {
+  @apply glass-panel rounded-2xl transition-all duration-500;
+  position: relative;
+  overflow: hidden;
+}
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 175, 55, 0.07),
+    rgba(229, 228, 226, 0.1),
+    transparent
+  );
+  transition: left 0.8s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.glass-card:hover::before {
+  left: 150%;
+}
+.glass-card:hover {
+  @apply shadow-glass-hover -translate-y-1;
+  border-color: rgba(212, 175, 55, 0.35);
+}
+
+/* =================================================================
+   METALLIC GRADIENT TEXT UTILITIES
+   ================================================================= */
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 35%, #AA7C11 70%, #D4AF37 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: metallic-shift 6s ease-in-out infinite;
+}
+
+.rose-gold-gradient-text {
+  background: linear-gradient(135deg, #F7C6C7 0%, #B76E79 50%, #8C4751 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.platinum-gradient-text {
+  background: linear-gradient(135deg, #F5F5F5 0%, #E5E4E2 30%, #C0C0C0 60%, #E5E4E2 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: metallic-shift 5s ease-in-out infinite;
+}
+
+.silver-gradient-text {
+  background: linear-gradient(135deg, #ECEFF1 0%, #C0C0C0 40%, #90A4AE 70%, #C0C0C0 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: metallic-shift 7s ease-in-out infinite;
+}
+
+/* =================================================================
+   LUXE AMBIENT BACKGROUND EFFECTS
+   ================================================================= */
+
+.botanical-hero-bg {
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(15, 82, 87, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 80%, rgba(229, 228, 226, 0.06) 0%, transparent 40%);
+}
+
+.dark .botanical-hero-bg {
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.12) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(15, 82, 87, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 50% 80%, rgba(183, 110, 121, 0.08) 0%, transparent 40%);
+}
+
+.luxe-glow-bg {
+  position: relative;
+}
+.luxe-glow-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 30% 30%, rgba(212, 175, 55, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 70%, rgba(229, 228, 226, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  animation: luxe-pulse 8s ease-in-out infinite alternate;
+}
+
+/* =================================================================
+   KEYFRAME ANIMATIONS
+   ================================================================= */
+
+@keyframes metallic-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes gold-shimmer {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(250%) skewX(-15deg); }
+}
+
+@keyframes luxe-pulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes sparkle-float {
+  0%, 100% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0.7;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px) scale(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-10px) translateX(-5px) scale(0.8);
+    opacity: 0.5;
+  }
+  75% {
+    transform: translateY(-25px) translateX(8px) scale(1.1);
+    opacity: 0.9;
+  }
+}
+
+@keyframes glass-reflect {
+  0% { transform: translateX(-100%) rotate(-45deg); }
+  100% { transform: translateX(300%) rotate(-45deg); }
+}
+
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-12px) rotate(3deg); }
+  66% { transform: translateY(-8px) rotate(-2deg); }
+}
+
+@keyframes ripple-out {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+@keyframes slide-up-fade {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes count-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Page Transition Animation Wrappers */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
+}
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+/* =================================================================
+   SHIMMER SWEEP EFFECT (for buttons and cards)
+   ================================================================= */
+
+.shimmer-sweep {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  transform: skewX(-15deg);
+  animation: gold-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* =================================================================
+   PREMIUM SCROLLBAR
+   ================================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(30, 58, 43, 0.03);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.3), rgba(229, 228, 226, 0.2));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.7), rgba(229, 228, 226, 0.4));
+}
+
+/* =================================================================
+   GOLD FILIGREE SECTION DIVIDER
+   ================================================================= */
+
+.section-divider {
+  position: relative;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), transparent);
+}
+.section-divider .divider-ornament {
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #D4AF37, #E5E4E2);
+  transform: rotate(45deg);
+  margin: 0 16px;
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.3);
+}
+
+/* =================================================================
+   UTILITY ANIMATIONS
+   ================================================================= */
+
+.animate-slide-up {
+  animation: slide-up-fade 0.5s ease-out both;
+}
+
+.animate-sparkle {
+  animation: sparkle-float 4s ease-in-out infinite;
+}
+
+.animate-glass-reflect {
+  animation: glass-reflect 4s ease-in-out infinite;
+}
+
+/* Stagger delay utilities */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }
+
+/* Fast page fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s ease-out;
+}
