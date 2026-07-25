@@ -292,6 +292,10 @@ export interface DbOrder {
   payment_status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
   workshop_status: string;
   tracking_number: string | null;
+  payment_screenshot_url?: string | null;
+  payment_uploaded_at?: string | null;
+  payment_verification_status?: string | null;
+  delivery_partner?: string | null;
   razorpay_order_id: string | null;
   razorpay_payment_id: string | null;
   created_at: string;
@@ -450,3 +454,234 @@ export async function logAudit(category: string, action: string, details?: Recor
     details: details || {},
   });
 }
+
+// ====================================================================
+// ADMIN PAYMENT QR CODES
+// ====================================================================
+
+export interface DbPaymentQr {
+  id: string;
+  name: string;
+  upi_id: string;
+  qr_image_url: string;
+  is_active: boolean;
+  notes: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export async function getPaymentQrs() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_qrs")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as DbPaymentQr[];
+}
+
+export async function getActivePaymentQr() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_qrs")
+    .select("*")
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as DbPaymentQr | null;
+}
+
+export async function createPaymentQr(qr: {
+  name: string;
+  upi_id: string;
+  qr_image_url: string;
+  is_active?: boolean;
+  notes?: string;
+}) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_qrs")
+    .insert(qr)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbPaymentQr;
+}
+
+export async function updatePaymentQr(id: string, updates: Partial<DbPaymentQr>) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_qrs")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbPaymentQr;
+}
+
+export async function deletePaymentQr(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from("payment_qrs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ====================================================================
+// ORDER PAYMENT PROOF & VERIFICATION
+// ====================================================================
+
+export async function submitOrderPaymentProof(orderId: string, screenshotUrl: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      payment_screenshot_url: screenshotUrl,
+      payment_uploaded_at: new Date().toISOString(),
+      payment_verification_status: "PENDING_VERIFICATION",
+      workshop_status: "1. Pending Verification",
+    })
+    .eq("id", orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbOrder;
+}
+
+export async function verifyOrderPayment(orderId: string, isApproved: boolean) {
+  const supabase = createClient();
+  const updates: Record<string, any> = {
+    payment_verification_status: isApproved ? "VERIFIED" : "REJECTED",
+    payment_status: isApproved ? "PAID" : "FAILED",
+    workshop_status: isApproved ? "2. Paid" : "1. Rejected",
+  };
+
+  const { data, error } = await supabase
+    .from("orders")
+    .update(updates)
+    .eq("id", orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbOrder;
+}
+
+// ====================================================================
+// CUSTOMER ADDRESSES
+// ====================================================================
+
+export interface DbCustomerAddress {
+  id: string;
+  user_id: string;
+  label: string;
+  full_name: string;
+  phone: string;
+  address_line: string;
+  pincode: string;
+  city: string;
+  state: string;
+  latitude: number | null;
+  longitude: number | null;
+  is_default: boolean;
+  created_at: string;
+}
+
+export async function getUserAddresses(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("customer_addresses")
+    .select("*")
+    .eq("user_id", userId)
+    .order("is_default", { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as DbCustomerAddress[];
+}
+
+export async function createAddress(addr: Omit<DbCustomerAddress, "id" | "created_at">) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("customer_addresses")
+    .insert(addr)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbCustomerAddress;
+}
+
+export async function deleteAddress(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from("customer_addresses").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ====================================================================
+// REALTIME CHAT (1-Month Retention)
+// ====================================================================
+
+export interface DbChatMessage {
+  id: string;
+  order_id: string | null;
+  sender_id: string | null;
+  sender_name: string;
+  sender_role: "Customer" | "Admin" | "Support Agent";
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export async function getOrderChatMessages(orderId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as DbChatMessage[];
+}
+
+export async function sendChatMessage(msg: {
+  order_id?: string;
+  sender_id?: string;
+  sender_name: string;
+  sender_role: "Customer" | "Admin" | "Support Agent";
+  message: string;
+}) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert(msg)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbChatMessage;
+}
+
+// ====================================================================
+// SHIPROCKET LOGISTICS INTEGRATION STUB
+// ====================================================================
+
+export async function calculateShiprocketFare(destinationPincode: string, weightKg: number = 0.5) {
+  // Calculated zone fare logic (Ready to connect with live Shiprocket Token API)
+  const isSouthIndia = ["560", "570", "600", "400", "500"].some(prefix => destinationPincode.startsWith(prefix));
+  const baseRate = isSouthIndia ? 99 : 149;
+  const weightCharge = Math.max(0, Math.ceil(weightKg - 0.5)) * 40;
+  
+  return {
+    courierName: "Shiprocket (Air Express)",
+    estimatedFareINR: baseRate + weightCharge,
+    estimatedDays: isSouthIndia ? "2-3 Days" : "4-5 Days",
+  };
+}
+
