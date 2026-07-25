@@ -1,14 +1,56 @@
 -- ====================================================================
--- SEED TEST DATA — Real products, banners, coupons, orders
--- Run this in Supabase SQL Editor AFTER running 01_initial_schema.sql
--- and seed_admin_users.sql
+-- AURELIA — COMPLETE DATABASE RESET + SEED
+-- This script DROPS all tables and recreates them fresh.
+-- Run this ONE file in Supabase SQL Editor to set up everything.
 -- ====================================================================
 
--- ★ CREATE MISSING TABLES (safe to re-run — uses IF NOT EXISTS)
+-- ★ STEP 1: DROP ALL EXISTING TABLES (clean slate)
+DROP TABLE IF EXISTS public.audit_logs CASCADE;
+DROP TABLE IF EXISTS public.order_items CASCADE;
+DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.coupons CASCADE;
+DROP TABLE IF EXISTS public.banners CASCADE;
+DROP TABLE IF EXISTS public.product_variants CASCADE;
+DROP TABLE IF EXISTS public.products CASCADE;
+DROP TABLE IF EXISTS public.categories CASCADE;
+DROP TABLE IF EXISTS public.user_roles CASCADE;
+DROP TABLE IF EXISTS public.roles CASCADE;
+
+-- Drop existing functions
+DROP FUNCTION IF EXISTS is_admin() CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE IF NOT EXISTS public.categories (
+-- ====================================================================
+-- ★ STEP 2: CREATE ALL TABLES
+-- ====================================================================
+
+-- ROLES
+CREATE TABLE public.roles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO public.roles (name, description) VALUES
+    ('Super Admin', 'Full system access'),
+    ('Admin', 'Catalog, orders, user management'),
+    ('Inventory Manager', 'Stock management'),
+    ('Marketing Manager', 'Banners, coupons, discounts'),
+    ('Support Agent', 'Customer tickets'),
+    ('Customer', 'Storefront customer');
+
+-- USER ROLES
+CREATE TABLE public.user_roles (
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES public.roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- CATEGORIES
+CREATE TABLE public.categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL UNIQUE,
     slug VARCHAR(100) NOT NULL UNIQUE,
@@ -16,7 +58,8 @@ CREATE TABLE IF NOT EXISTS public.categories (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.products (
+-- PRODUCTS
+CREATE TABLE public.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     slug VARCHAR(150) UNIQUE NOT NULL,
     name VARCHAR(200) NOT NULL,
@@ -40,7 +83,8 @@ CREATE TABLE IF NOT EXISTS public.products (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.product_variants (
+-- PRODUCT VARIANTS
+CREATE TABLE public.product_variants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
     sku VARCHAR(100) UNIQUE NOT NULL,
@@ -57,40 +101,8 @@ CREATE TABLE IF NOT EXISTS public.product_variants (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.banners (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    type VARCHAR(50) NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    subtitle TEXT,
-    cta_text VARCHAR(100),
-    cta_link TEXT,
-    desktop_image_url TEXT NOT NULL,
-    mobile_image_url TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    status VARCHAR(20) DEFAULT 'Active',
-    priority INT DEFAULT 1,
-    click_count INT DEFAULT 0,
-    start_date TIMESTAMP WITH TIME ZONE,
-    end_date TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.coupons (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    code VARCHAR(50) UNIQUE NOT NULL,
-    type VARCHAR(50) NOT NULL,
-    discount_value VARCHAR(50) NOT NULL,
-    min_purchase_inr NUMERIC(10, 2) DEFAULT 0,
-    max_usage INT DEFAULT 100,
-    used_count INT DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
-    categories TEXT DEFAULT 'All',
-    start_date DATE,
-    end_date DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.orders (
+-- ORDERS
+CREATE TABLE public.orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_number VARCHAR(50) UNIQUE NOT NULL,
     user_id UUID,
@@ -113,7 +125,43 @@ CREATE TABLE IF NOT EXISTS public.orders (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.audit_logs (
+-- BANNERS
+CREATE TABLE public.banners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    subtitle TEXT,
+    cta_text VARCHAR(100),
+    cta_link TEXT,
+    desktop_image_url TEXT NOT NULL,
+    mobile_image_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    status VARCHAR(20) DEFAULT 'Active',
+    priority INT DEFAULT 1,
+    click_count INT DEFAULT 0,
+    start_date TIMESTAMP WITH TIME ZONE,
+    end_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- COUPONS
+CREATE TABLE public.coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    discount_value VARCHAR(50) NOT NULL,
+    min_purchase_inr NUMERIC(10, 2) DEFAULT 0,
+    max_usage INT DEFAULT 100,
+    used_count INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    categories TEXT DEFAULT 'All',
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- AUDIT LOGS
+CREATE TABLE public.audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID,
     category VARCHAR(50) NOT NULL,
@@ -123,77 +171,55 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ★ ADD MISSING COLUMNS to existing tables (safe if columns already exist)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='status') THEN
-    ALTER TABLE public.products ADD COLUMN status VARCHAR(20) DEFAULT 'Published';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='flower_details') THEN
-    ALTER TABLE public.products ADD COLUMN flower_details TEXT;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='resin_type') THEN
-    ALTER TABLE public.products ADD COLUMN resin_type VARCHAR(100);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='materials') THEN
-    ALTER TABLE public.products ADD COLUMN materials TEXT[] DEFAULT '{}';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='care_guide') THEN
-    ALTER TABLE public.products ADD COLUMN care_guide TEXT[] DEFAULT '{}';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='banners' AND column_name='status') THEN
-    ALTER TABLE public.banners ADD COLUMN status VARCHAR(20) DEFAULT 'Active';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='banners' AND column_name='click_count') THEN
-    ALTER TABLE public.banners ADD COLUMN click_count INT DEFAULT 0;
-  END IF;
-END $$;
+-- ====================================================================
+-- ★ STEP 3: INDEXES + TRIGGERS
+-- ====================================================================
 
--- ★ ENABLE RLS (safe to re-run)
+CREATE INDEX idx_products_slug ON public.products(slug);
+CREATE INDEX idx_products_status ON public.products(status);
+CREATE INDEX idx_orders_status ON public.orders(payment_status);
+CREATE INDEX idx_coupons_code ON public.coupons(code);
+CREATE INDEX idx_banners_active ON public.banners(is_active);
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ====================================================================
+-- ★ STEP 4: ROW LEVEL SECURITY + POLICIES
+-- ====================================================================
+
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- ★ PUBLIC READ policies (so storefront can fetch data)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='products' AND policyname='Public Read Products') THEN
-    CREATE POLICY "Public Read Products" ON public.products FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='banners' AND policyname='Public Read Banners') THEN
-    CREATE POLICY "Public Read Banners" ON public.banners FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='coupons' AND policyname='Public Read Coupons') THEN
-    CREATE POLICY "Public Read Coupons" ON public.coupons FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='orders' AND policyname='Public Read Orders') THEN
-    CREATE POLICY "Public Read Orders" ON public.orders FOR SELECT USING (true);
-  END IF;
-  -- Allow inserts/updates for all (simplified for testing - tighten for production)
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='products' AND policyname='Allow All Products') THEN
-    CREATE POLICY "Allow All Products" ON public.products FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='banners' AND policyname='Allow All Banners') THEN
-    CREATE POLICY "Allow All Banners" ON public.banners FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='coupons' AND policyname='Allow All Coupons') THEN
-    CREATE POLICY "Allow All Coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='orders' AND policyname='Allow All Orders') THEN
-    CREATE POLICY "Allow All Orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='product_variants' AND policyname='Allow All Variants') THEN
-    ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
-    CREATE POLICY "Allow All Variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='categories' AND policyname='Allow All Categories') THEN
-    ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-    CREATE POLICY "Allow All Categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+-- Open read/write for testing (tighten these for production)
+CREATE POLICY "Allow All" ON public.products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.banners FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.user_roles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
 
--- ★ CATEGORIES
+-- ====================================================================
+-- ★ STEP 5: SEED TEST DATA
+-- ====================================================================
+
+-- CATEGORIES
 INSERT INTO public.categories (name, slug) VALUES
   ('Pendants', 'pendants'),
   ('Earrings', 'earrings'),
@@ -202,18 +228,16 @@ INSERT INTO public.categories (name, slug) VALUES
   ('Bracelets', 'bracelets'),
   ('Wedding Keepsakes', 'wedding-keepsakes'),
   ('Rings', 'rings'),
-  ('Hair Accessories', 'hair-accessories')
-ON CONFLICT (name) DO NOTHING;
+  ('Hair Accessories', 'hair-accessories');
 
--- ★ PRODUCTS (8 items with real descriptions)
--- Using only columns guaranteed to exist in the base schema + the ones we just added
+-- PRODUCTS
 INSERT INTO public.products (slug, name, tagline, description, category_id, base_price_inr, compare_at_price_inr, rating, review_count, is_customizable, is_featured, is_bestseller, status, images)
 VALUES
 (
   'royal-emerald-fern-pendant',
   'Royal Emerald Fern Pendant',
-  'Real Forest Fern encased in UV-Resistant Crystal Resin with 24K Gold Flakes',
-  'Handcrafted luxury pendant carrying a real, hand-harvested forest fern leaf captured in high-transparency crystal resin, accented with genuine 24K gold foil flakes and suspended on an 18K gold-plated snake chain. Each piece is unique — no two fern patterns are identical.',
+  'Real Forest Fern in UV-Resistant Crystal Resin with 24K Gold Flakes',
+  'Handcrafted luxury pendant with a real forest fern leaf in crystal resin, accented with 24K gold foil flakes on an 18K gold-plated chain.',
   (SELECT id FROM public.categories WHERE slug = 'pendants'),
   2999, 3999, 4.90, 48, TRUE, TRUE, TRUE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=85']
@@ -222,7 +246,7 @@ VALUES
   'blushing-rose-drop-earrings',
   'Blushing Rose Drop Earrings',
   'Preserved miniature rose buds in teardrop crystal resin with rose gold hooks',
-  'Delicate teardrop-shaped earrings with hand-preserved miniature pink rose buds suspended in optically clear resin. Finished with hypoallergenic rose gold-plated hooks. Lightweight and comfortable for all-day wear.',
+  'Teardrop earrings with preserved pink rose buds in optically clear resin. Hypoallergenic rose gold hooks.',
   (SELECT id FROM public.categories WHERE slug = 'earrings'),
   1899, 2499, 4.80, 32, TRUE, TRUE, FALSE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=800&q=85']
@@ -230,8 +254,8 @@ VALUES
 (
   'oceanic-botanical-coasters-set',
   'Oceanic Botanical Coasters (Set of 4)',
-  'Hand-poured ocean-themed resin coasters with real pressed wildflowers and gold leaf',
-  'Set of 4 handcrafted resin coasters featuring real pressed wildflowers arranged in an ocean-inspired gradient of teal and deep blue. Each coaster is accented with genuine gold leaf and has cork backing to protect furniture.',
+  'Ocean-themed resin coasters with real pressed wildflowers and gold leaf',
+  'Set of 4 resin coasters with real wildflowers in teal and blue gradient. Gold leaf accents, cork backing.',
   (SELECT id FROM public.categories WHERE slug = 'coasters'),
   2499, 3499, 4.95, 22, FALSE, TRUE, TRUE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=85']
@@ -239,8 +263,8 @@ VALUES
 (
   'lavender-dreams-bookmark',
   'Lavender Dreams Bookmark',
-  'Pressed lavender sprigs in slim crystal resin with silver foil accents',
-  'An elegant bookmark featuring real pressed lavender sprigs encased in crystal-clear resin, finished with delicate silver foil accents and a silk tassel. Perfect for book lovers who appreciate botanical art.',
+  'Pressed lavender sprigs in slim crystal resin with silver foil',
+  'Elegant bookmark with real pressed lavender in crystal-clear resin, silver foil accents and silk tassel.',
   (SELECT id FROM public.categories WHERE slug = 'bookmarks'),
   799, 999, 4.70, 65, FALSE, FALSE, TRUE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=800&q=85']
@@ -248,8 +272,8 @@ VALUES
 (
   'bridal-bouquet-preservation-block',
   'Bridal Bouquet Preservation Block',
-  'Your actual wedding bouquet preserved forever in crystal-clear optical resin with 24K gold',
-  'The ultimate bridal keepsake — we take your actual wedding bouquet flowers, professionally dry and preserve them, then hand-cast them in a large crystal-clear resin block with optional 24K gold flakes. Includes a personalized engraved brass plate.',
+  'Your wedding bouquet preserved forever in crystal resin with 24K gold',
+  'We preserve your actual wedding bouquet flowers in a crystal-clear resin block with 24K gold flakes and engraved brass plate.',
   (SELECT id FROM public.categories WHERE slug = 'wedding-keepsakes'),
   14999, 19999, 5.00, 18, TRUE, TRUE, FALSE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=800&q=85']
@@ -258,7 +282,7 @@ VALUES
   'wildflower-meadow-bracelet',
   'Wildflower Meadow Bracelet',
   'Adjustable gold-plated bracelet with real wildflower resin charm',
-  'A dainty adjustable bracelet featuring a small circular resin charm filled with real pressed wildflowers. The bracelet is 18K gold-plated with a lobster clasp and adjustable chain.',
+  'Dainty adjustable bracelet with a circular resin charm filled with real pressed wildflowers. 18K gold-plated.',
   (SELECT id FROM public.categories WHERE slug = 'bracelets'),
   1599, 2199, 4.85, 29, TRUE, FALSE, FALSE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1573408301185-9146fe634ad0?auto=format&fit=crop&w=800&q=85']
@@ -266,8 +290,8 @@ VALUES
 (
   'cherry-blossom-ring',
   'Cherry Blossom Resin Ring',
-  'Real preserved cherry blossom petal in adjustable resin ring with gold flakes',
-  'A stunning adjustable ring featuring a real preserved cherry blossom petal floating in crystal-clear resin, dusted with 24K gold flakes. The band is adjustable to fit most sizes.',
+  'Real cherry blossom petal in adjustable resin ring with gold flakes',
+  'Adjustable ring with a real cherry blossom petal in crystal resin, dusted with 24K gold flakes.',
   (SELECT id FROM public.categories WHERE slug = 'rings'),
   1299, 1799, 4.75, 41, TRUE, FALSE, TRUE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=800&q=85']
@@ -276,34 +300,32 @@ VALUES
   'daisy-sunflower-hair-clip',
   'Daisy & Sunflower Hair Clip',
   'Real pressed daisy and sunflower petals in a resin hair barrette',
-  'A beautiful hair clip featuring real pressed daisy and sunflower petals arranged in crystal resin, mounted on a sturdy gold-toned metal barrette. Adds a touch of botanical elegance to any hairstyle.',
+  'Hair clip with real pressed daisy and sunflower petals in crystal resin on a gold-toned metal barrette.',
   (SELECT id FROM public.categories WHERE slug = 'hair-accessories'),
   999, 1499, 4.60, 17, FALSE, FALSE, FALSE, 'Published',
   ARRAY['https://images.unsplash.com/photo-1490750967868-88aa4f44baee?auto=format&fit=crop&w=800&q=85']
-)
-ON CONFLICT (slug) DO NOTHING;
+);
 
--- ★ PRODUCT VARIANTS (one default variant per product)
+-- PRODUCT VARIANTS (one per product)
 INSERT INTO public.product_variants (product_id, sku, title, price_inr, inventory_quantity, metal_color)
-SELECT p.id, 
+SELECT p.id,
   'AUR-' || UPPER(LEFT(REPLACE(p.slug, '-', ''), 6)) || '-STD',
   'Standard',
   p.base_price_inr,
   CASE WHEN p.is_bestseller THEN 15 ELSE 25 END,
   'Gold'
-FROM public.products p
-WHERE NOT EXISTS (SELECT 1 FROM public.product_variants pv WHERE pv.product_id = p.id);
+FROM public.products p;
 
--- ★ BANNERS (3 homepage banners)
-INSERT INTO public.banners (type, title, subtitle, cta_text, cta_link, desktop_image_url, is_active, priority) VALUES
+-- BANNERS
+INSERT INTO public.banners (type, title, subtitle, cta_text, cta_link, desktop_image_url, is_active, status, priority) VALUES
 (
   'Homepage Banner',
   'Handcrafted Eternal Botanicals',
   'Preserving Nature''s Timeless Grace in Premium Optical Resin & 24K Gold',
-  'Explore Luxury Collection',
+  'Explore Collection',
   '/#shop',
   'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1920&q=85',
-  TRUE, 1
+  TRUE, 'Active', 1
 ),
 (
   'Festival Banner',
@@ -312,7 +334,7 @@ INSERT INTO public.banners (type, title, subtitle, cta_text, cta_link, desktop_i
   'Book Preservation',
   '/#custom-studio',
   'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1920&q=85',
-  TRUE, 2
+  TRUE, 'Active', 2
 ),
 (
   'Offer Banner',
@@ -321,19 +343,17 @@ INSERT INTO public.banners (type, title, subtitle, cta_text, cta_link, desktop_i
   'Shop Now',
   '/#shop',
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=85',
-  TRUE, 3
+  TRUE, 'Active', 3
 );
 
--- ★ COUPONS (4 active coupons)
+-- COUPONS
 INSERT INTO public.coupons (code, type, discount_value, min_purchase_inr, max_usage, is_active, categories) VALUES
   ('LUXURY10', 'Percentage', '10', 999, 500, TRUE, 'All'),
   ('FREESHIP', 'Free Shipping', '0', 1499, 1000, TRUE, 'All'),
   ('BRIDAL20', 'Percentage', '20', 5000, 100, TRUE, 'Wedding Keepsakes'),
-  ('WELCOME15', 'Percentage', '15', 499, 200, TRUE, 'All')
-ON CONFLICT (code) DO NOTHING;
+  ('WELCOME15', 'Percentage', '15', 499, 200, TRUE, 'All');
 
--- ★ TEST ORDERS (3 orders — using placeholder user_id since actual IDs depend on your auth setup)
--- NOTE: If these fail due to user_id FK constraint, comment out the user_id field
+-- TEST ORDERS
 INSERT INTO public.orders (order_number, customer_name, customer_email, customer_phone, shipping_address, subtotal_inr, discount_inr, shipping_inr, cgst_inr, sgst_inr, total_inr, payment_status, workshop_status, tracking_number) VALUES
 (
   'AUR-20260001',
@@ -358,5 +378,10 @@ INSERT INTO public.orders (order_number, customer_name, customer_email, customer
   '+91 76543 21098',
   '{"line1": "8 Connaught Place", "city": "New Delhi", "state": "Delhi", "pincode": "110001"}'::jsonb,
   14999, 3000, 0, 1080, 1080, 14159, 'PENDING', '1. Pending', NULL
-)
-ON CONFLICT (order_number) DO NOTHING;
+);
+
+-- ====================================================================
+-- ✅ DONE! Your database is now fully set up with test data.
+-- Tables: roles, user_roles, categories, products, product_variants,
+--         orders, banners, coupons, audit_logs
+-- ====================================================================
