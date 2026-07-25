@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToR2, isR2Configured } from "@/lib/r2";
+import { uploadToCloudinary, isCloudinaryConfigured } from "@/lib/cloudinary";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
@@ -15,17 +15,17 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // 1. Primary: If Cloudinary keys are set, upload to Cloudinary (Free 25 GB/month + Auto WebP compression!)
+    if (isCloudinaryConfigured) {
+      const cloudinaryUrl = await uploadToCloudinary(buffer, folder);
+      return NextResponse.json({ url: cloudinaryUrl, provider: "cloudinary" });
+    }
+
+    // 2. Fallback: Supabase Storage if Cloudinary keys aren't set yet during initial test
+    const supabase = await createServerSupabaseClient();
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-    // 1. If Cloudflare R2 is configured, upload to R2 ($0 egress fees!)
-    if (isR2Configured) {
-      const r2Url = await uploadToR2(buffer, fileName, file.type);
-      return NextResponse.json({ url: r2Url, provider: "cloudflare-r2" });
-    }
-
-    // 2. Fallback to Supabase Storage if R2 keys are not present yet
-    const supabase = await createServerSupabaseClient();
     const { data, error } = await supabase.storage
       .from("assets")
       .upload(fileName, buffer, {
